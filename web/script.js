@@ -1,133 +1,97 @@
-// 配置
-const webuiPort = 25567;
-let lastMessageId = 0;
-let isPolling = false;
 
-// DOM元素
-const chatHistory = document.getElementById('chat-history');
-const messageInput = document.getElementById('message-input');
-
-// 初始化
 document.addEventListener('DOMContentLoaded', () => {
-    // 开始轮询消息
-    startPolling();
-    
+    const messageInput = document.getElementById('messageInput');
+    const sendButton = document.getElementById('sendButton');
+    const messagesContainer = document.getElementById('messages');
+    let lastMessageId = 0;
+
+    const sendMessage = async (content) => {
+        try {
+            const response = await fetch('/api/send', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    type: 'message',
+                    content: content
+                })
+            });
+
+            const result = await response.json();
+            if (!result.success) {
+                showSystemMessage(`发送失败: ${result.error || '未知错误'}`);
+            }
+        } catch (error) {
+            showSystemMessage(`发送失败: ${error.message}`);
+        }
+    };
+
+    // 轮询获取新消息
+    const fetchNewMessages = async () => {
+        try {
+            const response = await fetch(`/api/messages?last_id=${lastMessageId}`);
+            const data = await response.json();
+            
+            if (data.messages.length > 0) {
+                data.messages.forEach(msg => {
+                    displayMessage(msg);
+                    lastMessageId = Math.max(lastMessageId, msg.id);
+                });
+            }
+        } catch (error) {
+            console.error('获取消息失败:', error);
+        } finally {
+            // 继续轮询
+            setTimeout(fetchNewMessages, 1000);
+        }
+    };
+
+    // 显示消息到页面
+    const displayMessage = (msg) => {
+        const messageDiv = document.createElement('div');
+        messageDiv.className = `message ${msg.type}`;
+        
+        if (msg.type === 'message') {
+            messageDiv.innerHTML = `
+                <span class="time">${new Date(msg.timestamp * 1000).toLocaleTimeString()}</span>
+                <span class="user">${msg.nickname}:</span>
+                <span class="content">${msg.message}</span>
+            `;
+        } else if (msg.type === 'system') {
+            messageDiv.innerHTML = `<span class="system">[系统] ${msg.message}</span>`;
+        }
+        
+        messagesContainer.appendChild(messageDiv);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    };
+
+    // 显示系统消息
+    const showSystemMessage = (text) => {
+        const systemDiv = document.createElement('div');
+        systemDiv.className = 'message system';
+        systemDiv.innerHTML = `<span>${text}</span>`;
+        messagesContainer.appendChild(systemDiv);
+        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+    };
+
     // 绑定发送按钮事件
-    document.querySelector('button').addEventListener('click', sendMessage);
-    
+    sendButton.addEventListener('click', () => {
+        const content = messageInput.value.trim();
+        if (content) {
+            sendMessage(content);
+            messageInput.value = '';
+        }
+    });
+
     // 绑定回车键发送
     messageInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') sendMessage();
-    });
-});
-
-// 发送消息
-function sendMessage() {
-    const text = messageInput.value.trim();
-    if (!text) return;
-    
-    const type = text.startsWith('/') ? 'command' : 'message';
-    
-    // 发送POST请求
-    fetch(`/api/send`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ type, content: text })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (!data.success) {
-            addSystemMessage(`错误: ${data.error || '发送失败'}`);
-        } else if (data.command_result) {
-            addSystemMessage(data.command_result);
+        if (e.key === 'Enter') {
+            sendButton.click();
         }
-    })
-    .catch(error => {
-        addSystemMessage(`发送失败: ${error.message}`);
     });
-    
-    // 清空输入框
-    messageInput.value = '';
-}
 
-// 开始轮询消息
-function startPolling() {
-    if (isPolling) return;
-    isPolling = true;
-    pollMessages();
-}
-
-// 轮询消息
-function pollMessages() {
-    if (!isPolling) return;
-    
-    // 发送GET请求获取新消息
-    fetch(`/api/messages?last_id=${lastMessageId}`)
-        .then(response => {
-            if (!response.ok) {
-                throw new Error(`HTTP error! status: ${response.status}`);
-            }
-            return response.json();
-        })
-        .then(data => {
-            // 处理新消息
-            if (data.messages && data.messages.length > 0) {
-                data.messages.forEach(msg => {
-                    addMessageToHistory(msg);
-                });
-                lastMessageId = data.last_id;
-            }
-            
-            // 继续轮询
-            setTimeout(pollMessages, 100);
-        })
-        .catch(error => {
-            console.error('轮询错误:', error);
-            addSystemMessage('连接已断开，正在尝试重连...');
-            // 出错后延迟重连
-            setTimeout(pollMessages, 3000);
-        });
-}
-
-// 添加消息到历史记录
-function addMessageToHistory(msg) {
-    const div = document.createElement('div');
-    
-    switch (msg.type) {
-        case 'message':
-            div.className = 'user-message';
-            div.textContent = `[${new Date(msg.timestamp * 1000).toLocaleTimeString()}] ${msg.nickname}: ${msg.message}`;
-            break;
-        case 'system':
-            div.className = 'system-message';
-            div.textContent = `[系统] ${msg.message}`;
-            break;
-        case 'online':
-            div.className = 'system-message';
-            div.textContent = `在线用户: ${msg.nicknames.join(', ')} (共${msg.count}人)`;
-            break;
-        case 'pong':
-            div.className = 'system-message';
-            div.textContent = `延迟: ${msg.latency}ms`;
-            break;
-    }
-    
-    chatHistory.appendChild(div);
-    chatHistory.scrollTop = chatHistory.scrollHeight;
-}
-
-// 添加系统消息
-function addSystemMessage(text) {
-    const div = document.createElement('div');
-    div.className = 'system-message';
-    div.textContent = `[系统] ${text}`;
-    chatHistory.appendChild(div);
-    chatHistory.scrollTop = chatHistory.scrollHeight;
-}
-
-// 页面关闭时停止轮询
-window.addEventListener('beforeunload', () => {
-    isPolling = false;
+    // 初始化：开始获取消息
+    fetchNewMessages();
+    showSystemMessage('');
 });

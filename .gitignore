@@ -6,4 +6,5 @@
 .DS_Store
 room_config
 /test
-/__pycache__
+/lib/__pycache__
+/lib/__pycache__/*

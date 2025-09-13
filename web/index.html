@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
+    <meta charset="UTF-8">
     <title>CryptoChat WebUI</title>
     <link rel="stylesheet" href="style.css">
 </head>
@@ -8,8 +9,10 @@
     <div class="chat-container">
         <div id="chat-history"></div>
         <div class="input-area">
-            <input type="text" id="message-input" placeholder="输入消息或命令...">
-            <button onclick="sendMessage()">发送</button>
+            <input type="text" id="message-input" placeholder="Type something...">
+            <input type="file" id="file-input" style="display: none;">
+            <button onclick="document.getElementById('file-input').click()">Attach</button>
+            <button onclick="sendMessage()">Send</button>
         </div>
     </div>
     <script src="script.js"></script>
