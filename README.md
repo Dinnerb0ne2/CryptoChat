@@ -207,6 +207,6 @@ enable_autosave=true
 **十、技术支持**
 
 如果在使用过程中遇到问题，可以通过以下方式获取支持：
-- 提交问题到 [GitHub Issues](https://github.com/Dinnerb0ne02/CryptoChat/issues)
+- 提交问题到 [GitHub Issues](https://github.com/Dinnerb0ne2/CryptoChat/issues)
 - 联系开发者邮箱：tomma_2022@outlook.com
 - 联系[T0ast](https://github.com/T0ast101CN)，使其通过物理方法联系Tom Ma
