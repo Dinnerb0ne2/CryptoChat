@@ -16,7 +16,7 @@
 #    limitations under the License.
 #
 # date: 2025-09-13
-# version: 1.2.1
+# version: 1.2.2
 # description: A simple chat application with encryption and room features.
 # LICENSE: Apache-2.0
 
