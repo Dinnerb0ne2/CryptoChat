@@ -1,0 +1,8 @@
+*.pem
+*.properties
+*.txt
+*.log
+*.json
+.DS_Store
+room_config
+/test
