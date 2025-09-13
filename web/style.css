@@ -1,0 +1,36 @@
+.chat-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+#chat-history {
+    height: 500px;
+    border: 1px solid #ccc;
+    padding: 10px;
+    overflow-y: auto;
+    margin-bottom: 10px;
+}
+
+.input-area {
+    display: flex;
+    gap: 10px;
+}
+
+#message-input {
+    flex: 1;
+    padding: 8px;
+}
+
+button {
+    padding: 8px 16px;
+}
+
+.system-message {
+    color: #666;
+    font-style: italic;
+}
+
+.user-message {
+    color: #000;
+}

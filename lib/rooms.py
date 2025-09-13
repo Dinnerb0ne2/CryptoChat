@@ -179,3 +179,6 @@ class _Room:
                 f.write(f"password_hash={self.password_hash}\n")
             else:
                 f.write(f"password={self.password}\n")
+
+    # @property # 向下兼容
+    # def rooms(self):return self._rooms

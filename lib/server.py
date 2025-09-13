@@ -11,21 +11,25 @@ from typing import Dict, Any
 from .crypto import RSA
 
 class ChatServer:
-    def init(self, config: dict):
-        self.cfg = config
-        self.ip = config["ip"]
-        self.port = int(config["port"])
+    def __init__(self, app):  # 接收 ChatApplication
+
+        self.running = True
+
+        self.app = app
+        self.cfg = app.config 
+        self.ip = self.cfg["ip"]
+        self.port = int(self.cfg["port"])
         self.clients: Dict[Any, dict] = {}  # (ip,port)->dict
-        self.bans = {"ips": set(), "users": set()}
-        self.bans_file = "bans.json"
         self.rooms = {}  # 若启用
         self.chat_history = []
-            
+
+        self.bans = {"ips": set(), "users": set()}
+        self.bans_file = "bans.json"
+
         self._load_bans()
-        if config.get("enable_rooms") == "true":
+        if self.cfg.get("enable_rooms"):  #  enable_rooms is bool
             self._load_rooms()
 
-        # 管理员命令
         self.admin_cmds = {
             "kick": self._kick,
             "ban": self._ban,
@@ -36,7 +40,7 @@ class ChatServer:
             "save": self._save_history,
         }
 
-        # 启动
+        # 启动服务器
         self.run()
 
     # life cycle
@@ -70,14 +74,28 @@ class ChatServer:
 
     def _stop(self, _args=None):
         print("Shutting down...")
-        self._save_history()
-        self._save_bans()
+        self._save_history()  # 保存聊天记录
+        self._save_bans()     # 保存封禁列表
+
+        for addr, client in self.clients.items():
+            try:
+                client["socket"].send(json.dumps({
+                    "type": "system", 
+                    "message": "Server is shutting down"
+                }).encode())
+                client["socket"].close()
+            except:
+                pass
+        self.clients.clear()
+
         try:
             self.sock.shutdown(socket.SHUT_RDWR)
             self.sock.close()
-        except:
+        except OSError:
             pass
-        sys.exit(0)
+        self.running = False
+
+        os._exit(0)
 
     def _handle_client(self, sock: socket.socket, addr: Any):
         try:
@@ -123,28 +141,35 @@ class ChatServer:
             except:
                 pass
 
+
     def _route_message(self, addr: Any, msg: dict):
         t = msg["type"]
         client = self.clients[addr]
         if t == "message":
             txt = msg["message"]
+            timestamp = time.time()
+            
+            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            room_info = f"[{client['room']}]" if client["room"] else "[public]"
+            print(f"{room_info} [{current_time}]\n    {client['nickname']}: {txt}")
             pack = {
                 "type": "message",
                 "nickname": client["nickname"],
                 "message": txt,
-                "timestamp": time.time(),
+                "timestamp": timestamp,
                 "room": client["room"],
             }
             self.chat_history.append(
                 {
                     "timestamp": datetime.utcnow().isoformat(),
-                    "local_time": datetime.now().strftime("%m/%d %H:%M:%S"),
+                    "local_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "user": client["nickname"],
                     "message": txt,
                     "room": client["room"],
                 }
             )
             self._broadcast(pack, room=client["room"])
+
         elif t == "ping":
             sock = client["socket"]
             sock.send(json.dumps({"type": "pong", "timestamp": msg["timestamp"]}).encode())
@@ -173,18 +198,17 @@ class ChatServer:
             except (BrokenPipeError, OSError):
                 pass
 
-    # ---------- 管理员 ----------
     def _admin_console(self):
-        print("=== Admin Console ===  /help")
-        while True:
+        print("=== Admin Console ===")
+        print("tips: type /help to get help info")
+        while self.running:
             try:
-                line = input("admin> ").strip()
+                line = input("").strip()
             except (EOFError, KeyboardInterrupt):
                 self._stop()
             if line.startswith("/"):
                 self._handle_admin(line[1:])
             elif line:
-                # 管理员聊天
                 pack = {
                     "type": "message",
                     "nickname": "Admin",

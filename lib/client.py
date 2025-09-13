@@ -20,8 +20,11 @@ class ChatClient:
         self.room: Optional[str] = None
 
         self._init_crypto()
+        self.running = True
 
         self.chat_history = []
+
+        self._init_webui()
 
         # 聊天,启动!
         self.run()
@@ -87,11 +90,13 @@ class ChatClient:
     def _handle_message(self, msg: dict):
         t = msg["type"]
         if t == "message":
-            print(msg.get("formatted_message", ""))
+            time_str = datetime.fromtimestamp(msg.get("timestamp", time.time())).strftime("%Y-%m-%d %H:%M:%S")
+            formatted = f"{time_str}\n    {msg.get('nickname', 'Unknown')}: {msg.get('message', '')}"
+            print(formatted)
             self.chat_history.append(
                 {
                     "timestamp": msg.get("timestamp", time.time()),
-                    "local_time": datetime.fromtimestamp(msg.get("timestamp", time.time())).strftime("%m/%d %H:%M:%S"),
+                    "local_time": time_str,
                     "user": msg.get("nickname", "Unknown"),
                     "message": msg.get("message", ""),
                     "room": msg.get("room", "public"),
@@ -111,10 +116,13 @@ class ChatClient:
             self._save_history()
             print("Chat history saved")
 
+        if self.config.get('enable_webui'):
+            self.web_server.broadcast_to_web(msg)
+
     def _send_loop(self):
-        while True:
+        while self.running:
             try:
-                text = input()
+                text = input("")
             except (EOFError, KeyboardInterrupt):
                 print("\nExit client")
                 break
@@ -174,5 +182,18 @@ class ChatClient:
         fname = f"client_history_{int(time.time())}.txt"
         with open(fname, "w", encoding="utf-8") as f:
             for item in self.chat_history:
-                f.write(f"[{item['local_time']}] {item['user']}: {item['message']}\n")
+                f.write(f"{item['local_time']}\n    {item['user']}: {item['message']}\n")
         print(f"Saved -> {fname}")
+
+    def _init_webui(self):
+        # 检查配置合法性
+        if not self.config.get('enable_console') and not self.config.get('enable_webui'):
+            raise ValueError("enable_console和enable_webui不能同时为false")
+        
+        # 启动WebUI服务
+        if self.config.get('enable_webui'):
+            from .web import ChatWebServer
+            self.web_server = ChatWebServer(
+                self, 
+                port=int(self.config.get('webui_port', 25567))
+            )
