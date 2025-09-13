@@ -3,8 +3,11 @@
 *.txt
 *.log
 *.json
+*.spec
+*.exe
 .DS_Store
 room_config
+/build
 /test
 /lib/__pycache__
 /lib/__pycache__/*
