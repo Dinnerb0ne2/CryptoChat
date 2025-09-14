@@ -5,6 +5,7 @@
 *.json
 *.spec
 *.exe
+*.zip
 .DS_Store
 room_config
 /build
