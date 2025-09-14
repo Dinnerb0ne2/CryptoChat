@@ -11,4 +11,4 @@ room_config
 /build
 /test
 /lib/__pycache__
-/lib/__pycache__/*.__pycacMty20090
+/lib/__pycache__/*.pyc
