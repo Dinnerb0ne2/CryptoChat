@@ -144,15 +144,19 @@ class RSA:
         return _RSAKey(n, e, d)
 
     @staticmethod
-    def export_key(key: _RSAKey, format: str = "PEM") -> bytes:
-        """Export private key."""
+    def export_private_key(key: _RSAKey, format: str = "PEM") -> bytes:
         if not key.is_private():
             raise ValueError("cannot export private key from public key")
         return _export_pem(key, "PRIVATE")
 
     @staticmethod
+    def export_public_key(key: _RSAKey, format: str = "PEM") -> bytes:
+        if key.is_private():
+            key = RSA.publickey(key)
+        return _export_pem(key, "PUBLIC")
+
+    @staticmethod
     def publickey(key: _RSAKey) -> _RSAKey:
-        """Return public key."""
         return _RSAKey(key.n, key.e, 0)
 
     @staticmethod

@@ -8,7 +8,7 @@ import threading
 from datetime import datetime
 from typing import Optional
 
-from .crypto import RSA
+from .crypto import CryptoManager
 
 
 class ChatClient:
@@ -26,25 +26,13 @@ class ChatClient:
 
         self._init_webui()
 
-        # 聊天,启动!
+        # Start chat!
         self.run()
 
-    # init
+    # Initialization
     def _init_crypto(self):
-        pri_file = self.config.get("key_file", "private_key.pem")
-        pub_file = self.config.get("pubkey_file", "public_key.pem")
-
-        if not (os.path.exists(pri_file) and os.path.exists(pub_file)):
-            key = RSA.generate(int(self.config.get("key_length", 2048)))
-            with open(pri_file, "wb") as f:
-                f.write(RSA.export_key(key))
-            with open(pub_file, "wb") as f:
-                f.write(RSA.export_key(RSA.publickey(key)))
-        else:
-            pass
-
-        with open(pub_file, "rb") as f:
-            self.public_key = f.read()
+        """Initialize crypto manager"""
+        self.crypto = CryptoManager(self.config)
 
     def run(self):
         print(f"Connecting to {self.host}:{self.port}")
@@ -55,20 +43,31 @@ class ChatClient:
             print("Server unreachable")
             sys.exit(1)
 
-        # tcp packet
+        # TCP handshake packet
         password = input("Server password (blank if none): ") if self.config.get("enable_password") == "true" else ""
         room_pwd = ""
         if self.config.get("enable_rooms") == "true" and self.room:
             room_pwd = input(f"Password for room {self.room} (blank if none): ")
 
-        hello = {
+        # Prepare hello message with encrypted sensitive fields
+        hello_data = {
             "nickname": self.nickname,
-            "public_key": self.public_key.decode(),
+            "public_key": self.crypto.get_public_key_pem(),
             "room": self.room,
             "password": password,
             "room_password": room_pwd,
         }
-        self.sock.send(json.dumps(hello).encode())
+        encrypted_hello = self.crypto.encrypt(hello_data)
+        self.sock.send(encrypted_hello)
+
+        # Get server's public key from initial response
+        server_response = self.sock.recv(4096)
+        server_pub_key = json.loads(server_response.decode()).get("server_public_key")
+        if server_pub_key:
+            self.crypto.set_server_public_key(server_pub_key)
+        else:
+            print("Failed to get server public key")
+            sys.exit(1)
 
         threading.Thread(target=self._recv_loop, daemon=True).start()
         self._send_loop()
@@ -80,7 +79,8 @@ class ChatClient:
                 if not data:
                     print("\nDisconnected from server")
                     break
-                msg = json.loads(data.decode())
+                # Decrypt received data
+                msg = self.crypto.decrypt(data)
                 self._handle_message(msg)
             except (ConnectionResetError, json.JSONDecodeError):
                 print("\nConnection lost")
@@ -129,29 +129,30 @@ class ChatClient:
             if text.startswith("/"):
                 self._handle_cmd(text[1:])
             else:
-                self.sock.send(
-                    json.dumps(
-                        {
-                            "type": "message",
-                            "message": text,
-                            "timestamp": time.time(),
-                            "room": self.room,
-                        }
-                    ).encode()
-                )
+                # Encrypt message before sending
+                message_data = {
+                    "type": "message",
+                    "message": text,
+                    "timestamp": time.time(),
+                    "room": self.room,
+                }
+                encrypted_msg = self.crypto.encrypt(message_data)
+                self.sock.send(encrypted_msg)
         self.sock.close()
         sys.exit(0)
 
-    # command
+    # Command handling
     def _handle_cmd(self, cmd: str):
         parts = cmd.strip().split()
         if not parts:
             return
         c = parts[0].lower()
         if c == "ping":
-            self.sock.send(json.dumps({"type": "ping", "timestamp": time.time()}).encode())
+            cmd_data = {"type": "ping", "timestamp": time.time()}
+            self.sock.send(self.crypto.encrypt(cmd_data))
         elif c == "online":
-            self.sock.send(json.dumps({"type": "online"}).encode())
+            cmd_data = {"type": "online"}
+            self.sock.send(self.crypto.encrypt(cmd_data))
         elif c == "exit":
             self.sock.close()
             sys.exit(0)
@@ -160,19 +161,18 @@ class ChatClient:
         elif c == "join" and len(parts) >= 2:
             room = " ".join(parts[1:])
             pwd = input(f"Password for {room} (blank if none): ")
-            self.sock.send(
-                json.dumps(
-                    {
-                        "type": "join",
-                        "room": room,
-                        "room_password": pwd,
-                    }
-                ).encode()
-            )
+            cmd_data = {
+                "type": "join",
+                "room": room,
+                "room_password": pwd,
+            }
+            self.sock.send(self.crypto.encrypt(cmd_data))
         elif c == "rooms":
-            self.sock.send(json.dumps({"type": "rooms"}).encode())
+            cmd_data = {"type": "rooms"}
+            self.sock.send(self.crypto.encrypt(cmd_data))
         elif c == "save":
-            self.sock.send(json.dumps({"type": "save"}).encode())
+            cmd_data = {"type": "save"}
+            self.sock.send(self.crypto.encrypt(cmd_data))
         else:
             print(f"Unknown command: {c}")
 
@@ -186,11 +186,11 @@ class ChatClient:
         print(f"Saved -> {fname}")
 
     def _init_webui(self):
-        # 检查配置合法性
+        # Check configuration validity
         if not self.config.get('enable_console') and not self.config.get('enable_webui'):
-            raise ValueError("enable_console和enable_webui不能同时为false")
+            raise ValueError("enable_console and enable_webui cannot both be false")
         
-        # 启动WebUI服务
+        # Start WebUI service if enabled
         if self.config.get('enable_webui'):
             from .web import ChatWebServer
             self.web_server = ChatWebServer(

@@ -26,10 +26,10 @@ import json
 from datetime import datetime
 
 # Import RSA class AND _export_pem helper from your custom crypto.py
-from lib.crypto   import RSA, _export_pem
-from lib.server   import ChatServer
-from lib.client   import ChatClient
-from lib.rooms    import RoomManager 
+from modules.crypto   import RSA
+from modules.server   import ChatServer
+from modules.client   import ChatClient
+from modules.rooms    import RoomManager 
 
 
 class ChatApplication:
@@ -275,9 +275,9 @@ class ChatApplication:
             print(f"Generating new {algo} key pair ({key_length} bits)...")
             if algo == 'RSA':
                 private_key_obj = RSA.generate(key_length)
-                private_key_pem = RSA.export_key(private_key_obj)
+                private_key_pem = RSA.export_private_key(private_key_obj)
                 public_key_obj = RSA.publickey(private_key_obj)
-                public_key_pem = _export_pem(public_key_obj, kind="PUBLIC")            
+                public_key_pem = RSA.export_public_key(public_key_obj)            
             else:
                 # Reject unsupported encryption algorithms
                 raise ValueError(f"Unsupported encryption algorithm: {algo} (only RSA is supported)")

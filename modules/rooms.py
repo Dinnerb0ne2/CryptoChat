@@ -5,7 +5,8 @@ import hashlib
 import threading
 from typing import Dict, Set, Optional, List
 
-class RoomError(Exception):pass
+class RoomError(Exception):
+    pass
 
 class RoomManager:
     def __init__(self, cfg_dir: str, enable_hash: bool = False):
@@ -13,32 +14,37 @@ class RoomManager:
         self.enable_hash = enable_hash
         os.makedirs(self.cfg_dir, exist_ok=True)
 
-        # 内存结构  {room_name: _Room}
+        # In-memory structure {room_name: _Room}
         self._rooms: Dict[str, "_Room"] = {}
         self._lock = threading.RLock()
 
         self._load_all_rooms()
 
-    # api
+    # Public API
     def list_rooms(self) -> List[str]:
-        """返回房间名称列表（有序）"""
         with self._lock:
             return sorted(self._rooms.keys())
 
     def room_exist(self, name: str) -> bool:
+        #　Check if a room exists
         with self._lock:
             return name in self._rooms
 
     def join_room(self, room: str, nick: str, ip: str, password: str = "") -> None:
+        """
+        Join a room with nickname and IP
+        Raises RoomError if banned or wrong password
+        """
         with self._lock:
             r = self._get_room(room)
             if r.is_banned(nick, ip):
-                raise RoomError("您已被封禁")
+                raise RoomError("You are banned")
             if not r.check_password(password, self.enable_hash):
-                raise RoomError("房间密码错误")
+                raise RoomError("Incorrect room password")
             r.members.add(nick)
 
     def leave_room(self, room: str, nick: str) -> None:
+        # Remove a user from a room
         with self._lock:
             r = self._rooms.get(room)
             if r:
@@ -46,14 +52,14 @@ class RoomManager:
 
     def broadcast_packet(self, room: Optional[str], packet: dict, curr_members: Set[str]):
         """
-        仅供 server 调用：
-        如果 room 为 None -> 全局广播
-        否则只发给本房间成员(nick 必须在 curr_members 中）
-        返回实际需要下发到的 socket 列表
+        For server use only:
+        If room is None -> broadcast globally
+        Otherwise send only to room members (nick must be in curr_members)
+        Returns list of sockets to send to
         """
         with self._lock:
             if room is None:
-                # 全局
+                # Global broadcast
                 return [c["socket"] for c in curr_members]
             r = self._rooms.get(room)
             if not r:
@@ -61,9 +67,9 @@ class RoomManager:
             return [c["socket"] for c in curr_members if c["nickname"] in r.members]
 
     def ban(self, room: str, *, nick: Optional[str] = None, ip: Optional[str] = None) -> None:
-        """房间级封禁，至少填 nick 或 ip"""
+        """Room-level ban, specify at least nick or ip"""
         if not nick and not ip:
-            raise RoomError("必须指定 nick 或 ip")
+            raise RoomError("Must specify either nick or ip")
         with self._lock:
             r = self._get_room(room)
             if nick:
@@ -73,6 +79,7 @@ class RoomManager:
             r.save_bans()
 
     def unban(self, room: str, *, nick: Optional[str] = None, ip: Optional[str] = None) -> None:
+        """Remove ban for a user or IP in a room"""
         with self._lock:
             r = self._get_room(room)
             if nick and nick.lower() in r.ban_nicks:
@@ -82,26 +89,27 @@ class RoomManager:
             r.save_bans()
 
     def set_password(self, room: str, new_pwd: str) -> None:
-        """设置房间密码（如启用哈希则自动哈希）"""
+        """Set room password (auto-hashes if enabled)"""
         with self._lock:
             r = self._get_room(room)
             if self.enable_hash:
                 r.password_hash = hashlib.sha256(new_pwd.encode()).hexdigest()
-                r.password = ""  # 清空明文
+                r.password = ""  # Clear plaintext
             else:
                 r.password = new_pwd
                 r.password_hash = ""
             r.save_config()
 
-    # -------------------- 内部封装 --------------------
+    # -------------------- Internal methods --------------------
     def _get_room(self, name: str) -> "_Room":
+        """Get room by name or raise RoomError if not exists"""
         r = self._rooms.get(name)
         if not r:
-            raise RoomError("房间不存在")
+            raise RoomError("Room does not exist")
         return r
 
     def _load_all_rooms(self) -> None:
-        """启动时扫描 cfg_dir 下 *.cfg 文件"""
+        """Load all rooms from *.cfg files in cfg_dir on startup"""
         for fname in os.listdir(self.cfg_dir):
             if not fname.endswith(".cfg"):
                 continue
@@ -117,14 +125,15 @@ class RoomManager:
                     password_hash=cfg.get("password_hash", ""),
                     cfg_dir=self.cfg_dir,
                 )
-                # 加载封禁
+                # Load bans for this room
                 r.load_bans()
                 self._rooms[name] = r
             except Exception as e:
-                print(f"[RoomManager] 跳过无效配置 {fname}: {e}")
+                print(f"[RoomManager] Skipping invalid config {fname}: {e}")
 
 
 class _Room:
+    """Internal room representation"""
     def __init__(
         self,
         name: str,
@@ -145,14 +154,17 @@ class _Room:
         self.ban_ips: Set[str] = set()
 
     def is_banned(self, nick: str, ip: str) -> bool:
+        """Check if a user (by nick or IP) is banned from this room"""
         return nick.lower() in self.ban_nicks or ip in self.ban_ips
 
     def save_bans(self) -> None:
+        """Save ban list to file"""
         path = os.path.join(self.cfg_dir, f"{self.name}_bans.json")
         with open(path, "w", encoding="utf-8") as f:
             json.dump({"nicks": list(self.ban_nicks), "ips": list(self.ban_ips)}, f, indent=2)
 
     def load_bans(self) -> None:
+        """Load ban list from file"""
         path = os.path.join(self.cfg_dir, f"{self.name}_bans.json")
         if not os.path.exists(path):
             return
@@ -162,7 +174,7 @@ class _Room:
             self.ban_ips = set(data.get("ips", []))
 
     def check_password(self, pwd: str, enable_hash: bool) -> bool:
-        """空密码表示无验证"""
+        """Check if password is correct (empty password means no authentication)"""
         if enable_hash:
             if not self.password_hash:
                 return True
@@ -171,6 +183,7 @@ class _Room:
             return self.password == pwd or self.password == ""
 
     def save_config(self) -> None:
+        """Save room configuration to file"""
         path = os.path.join(self.cfg_dir, f"{self.name}.cfg")
         with open(path, "w", encoding="utf-8") as f:
             f.write(f"name={self.name}\n")
@@ -179,6 +192,3 @@ class _Room:
                 f.write(f"password_hash={self.password_hash}\n")
             else:
                 f.write(f"password={self.password}\n")
-
-    # @property # 向下兼容
-    # def rooms(self):return self._rooms

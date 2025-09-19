@@ -6,9 +6,13 @@
 *.spec
 *.exe
 *.zip
+
 .DS_Store
-room_config
+
+/room_config
 /build
 /test
-/lib/__pycache__
-/lib/__pycache__/*.pyc
+/modules/__pycache__
+/modules/algorithm/__pycache__
+
+clean.cmd
