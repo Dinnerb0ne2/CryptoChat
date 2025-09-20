@@ -2,13 +2,14 @@ import os
 import sys
 import json
 import time
+import shutil
 import socket
 import threading
 import hashlib
 from datetime import datetime
 from typing import Dict, Any
 
-from .crypto import RSA, CryptoManager
+from .crypto import CryptoManager
 
 
 class ChatServer:
@@ -28,6 +29,9 @@ class ChatServer:
 
         self.bans = {"ips": set(), "users": set()}
         self.bans_file = "bans.json"
+
+        self.client_keys_dir = self.cfg["client_keys_dir"]  # Directory to store client public keys
+        os.makedirs(self.client_keys_dir, exist_ok=True)  # Ensure the directory exists
 
         self._load_bans()
         if self.cfg.get("enable_rooms"):  # enable_rooms is boolean
@@ -85,6 +89,13 @@ class ChatServer:
         self._save_history()  # Save chat history
         self._save_bans()     # Save ban list
 
+        if os.path.exists(self.client_keys_dir):
+            try:
+                shutil.rmtree(self.client_keys_dir)
+                print(f"Deleted client keys directory: {self.client_keys_dir}")
+            except Exception as e:
+                print(f"Failed in cleaning client public keys: {e}")
+
         for addr, client in self.clients.items():
             try:
                 response = self._encrypt_response({
@@ -108,16 +119,29 @@ class ChatServer:
 
     def _handle_client(self, sock: socket.socket, addr: Any):
         try:
-            # Receive and decrypt hello message
-            data = sock.recv(4096)
-            hello = self._decrypt_client_data(data, None)  # No client pubkey yet
+            max_timeout = int(self.cfg.get("max_timeout", 20))
+
+            sock.settimeout(max_timeout)
             
-            # Extract client info
+            # hello
+            data = sock.recv(4096)
+            if not data:
+                raise ConnectionAbortedError("")
+            
+            hello = self._decrypt_client_data(data, None)
+
+            # client info
             nick = hello.get("nickname", "Unknown").strip() or "Unknown"
             client_pub_key = hello.get("public_key")
             room = hello.get("room") if self.cfg.get("enable_rooms") == "true" else None
             
-            # Check bans
+            if client_pub_key:
+                timestamp = int(time.time())
+                key_filename = f"{addr[0]}_{addr[1]}_{timestamp}.pem"
+                key_filepath = os.path.join(self.client_keys_dir, key_filename)
+                with open(key_filepath, "w", encoding="utf-8") as key_file:
+                    key_file.write(client_pub_key)
+
             if nick.lower() in self.bans["users"] or addr[0] in self.bans["ips"]:
                 response = self._encrypt_response({
                     "type": "system", 
@@ -127,23 +151,23 @@ class ChatServer:
                 sock.close()
                 return
             
-            # Verify server password if enabled
+            # Password verification
             if self.cfg.get("enable_password") == "true":
                 pwd = hello.get("password", "")
                 if not self._verify_server_pwd(pwd):
                     response = self._encrypt_response({
                         "type": "system", 
-                        "message": "Wrong password"
+                        "message": "Incorrect password"
                     }, client_pub_key)
                     sock.send(response)
                     sock.close()
                     return
             
-            # Send server's public key to client
+            # Send server public key
             server_pub_key = self.crypto.get_public_key_pem()
             sock.send(json.dumps({"server_public_key": server_pub_key}).encode())
             
-            # Register client
+            # Register client info
             self.clients[addr] = {
                 "socket": sock, 
                 "nickname": nick, 
@@ -152,44 +176,61 @@ class ChatServer:
                 "public_key": client_pub_key
             }
             
-            # Broadcast join message
+            # Broadcast user join message
             self._broadcast({
                 "type": "system", 
-                "message": f"{nick} joined"
+                "message": f"{nick} has joined the chat"
             }, room=room, exclude=addr)
             
-            # Send MOTD to client
+            # Send welcome message (MOTD)
             motd_msg = self._encrypt_response({
                 "type": "system", 
                 "message": self._motd(room)
             }, client_pub_key)
             sock.send(motd_msg)
 
-            # Main message handling loop
+            # Message handling main loop - set persistent communication timeout (using same config)
+            sock.settimeout(max_timeout)
+            
             while True:
                 data = sock.recv(4096)
                 if not data:
-                    break
-                # Decrypt client message
+                    break  # Client disconnected
+                
+                # Update last active time
+                self.clients[addr]["last_active"] = time.time()
+                
+                # Decrypt client message and route handling
                 msg = self._decrypt_client_data(data, client_pub_key)
                 self._route_message(addr, msg)
                 
-        except (ConnectionResetError, json.JSONDecodeError) as e:
-            print(f"Error handling client {addr}: {e}")
+        except socket.timeout:
+            print(f"Client {addr} timed out (no response for over {max_timeout} seconds)")
+        except ConnectionResetError:
+            print(f"Client {addr} forcibly disconnected")
+        except json.JSONDecodeError:
+            print(f"Client {addr} sent invalid JSON data")
+        except Exception as e:
+            print(f"Error while handling client {addr}: {str(e)}")
         finally:
+            # Clean up client connection
             if addr in self.clients:
                 nick = self.clients[addr]["nickname"]
                 room = self.clients[addr]["room"]
                 del self.clients[addr]
+                
+                # Broadcast user leave message
                 self._broadcast({
                     "type": "system", 
-                    "message": f"{nick} left"
+                    "message": f"{nick} has left the chat"
                 }, room=room)
-                print(f"{nick} disconnected")
+                print(f"{nick} has disconnected")
+            
+            # Ensure socket is closed
             try:
                 sock.close()
-            except:
-                pass
+            except Exception as e:
+                print(f"Error while closing client socket: {str(e)}")
 
     def _decrypt_client_data(self, data: bytes, client_pub_key: str) -> dict:
         """Decrypt data received from client"""

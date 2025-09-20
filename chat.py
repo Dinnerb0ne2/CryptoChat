@@ -101,8 +101,10 @@ class ChatApplication:
             'nickname': '',
             'motd': '',
             'max_users': '20',
+            'max_timeout': '20',
             'pubkey_file': 'public_key.pem',
             'key_file': 'private_key.pem',
+            'client_keys_dir': 'client_keys/',
             'enable_rooms': 'false',
             'room_config': './room_config/',
             'enable_hash': 'false',
@@ -134,6 +136,10 @@ class ChatApplication:
         self.config['key_length'] = int(self.config['key_length'])
         self.config['enable_rooms'] = self.config['enable_rooms'].lower() == 'true'
         self.config['max_users'] = int(self.config['max_users'])
+        self.config['max_timeout'] = int(self.config.get('max_timeout', default_config['max_timeout']))
+
+        self.config['client_keys_dir'] = self.config.get('client_keys_dir', 'client_keys/')
+
         self.config['enable_hash'] = self.config['enable_hash'].lower() == 'true'
         self.config['enable_password'] = self.config['enable_password'].lower() == 'true'
         self.config['enable_autosave'] = self.config['enable_autosave'].lower() == 'true'

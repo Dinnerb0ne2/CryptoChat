@@ -131,6 +131,35 @@ class RoomManager:
             except Exception as e:
                 print(f"[RoomManager] Skipping invalid config {fname}: {e}")
 
+    def _create_room(self, name: str, motd: str = "", password: str = "") -> None:
+        with self._lock:
+            if name in self._rooms:
+                raise RoomError("Room already exists")
+            room = _Room(
+                name=name,
+                motd=motd,
+                cfg_dir=self.cfg_dir
+            )
+            if password:
+                self.set_password(name, password)
+            room.save_config()
+            self._rooms[name] = room
+
+    def _delete_room(self, name: str) -> None:
+        # delete room (includes configs and saves)
+        with self._lock:
+            if name not in self._rooms:
+                raise RoomError("Room not found")
+
+            config_path = os.path.join(self.cfg_dir, f"{name}.cfg")
+            if os.path.exists(config_path):
+                os.remove(config_path)
+
+            ban_path = os.path.join(self.cfg_dir, f"{name}_bans.json")
+            if os.path.exists(ban_path):
+                os.remove(ban_path)
+            del self._rooms[name]
+
 
 class _Room:
     """Internal room representation"""

@@ -31,7 +31,7 @@ class ChatClient:
 
     # Initialization
     def _init_crypto(self):
-        """Initialize crypto manager"""
+        # Initialize crypto manager
         self.crypto = CryptoManager(self.config)
 
     def run(self):

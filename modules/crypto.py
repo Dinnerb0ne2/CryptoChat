@@ -84,4 +84,4 @@ class CryptoManager:
 
     def get_public_key_pem(self) -> str:
         """Get client's public key in PEM format (for sending to server)"""
-        return RSA.export_key(self.public_key).decode()
+        return RSA.export_public_key(self.public_key).decode()

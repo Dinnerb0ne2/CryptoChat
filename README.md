@@ -132,19 +132,21 @@ enable_rooms=true
 | `mode`               | 设置程序运行模式，可选值为 `server`（服务器模式）或 `client`（客户端模式）。 |
 | `ip`                 | 服务器监听的 IP 地址（服务器模式）或要连接的服务器 IP 地址（客户端模式）。 |
 | `port`               | 服务器监听的端口号（服务器模式）或要连接的服务器端口号（客户端模式）。     |
-| `encrypt_algorithm`  | 加密算法，可选值包括 `RSA`、`DSA`、`ECDSA` 等。                         |
-| `key_length`         | 密钥长度，不同加密算法有不同的密钥长度要求。                           |
-| `nickname`           | 客户端的昵称。                                                        |
-| `motd`               | 服务器的欢迎消息（Message of the Day）。                              |
-| `max_users`          | 服务器允许的最大用户数量（仅在服务器模式下有效）。                     |
-| `pubkey_file`        | 公钥文件路径。                                                        |
-| `key_file`           | 私钥文件路径。                                                        |
-| `enable_rooms`       | 是否启用房间功能。                                                    |
-| `room_config`        | 房间配置文件目录路径。                                                |
-| `enable_hash`        | 是否启用密码哈希功(未写相关逻辑,无用)。                                                |
-| `hash_type`          | 哈希算法类型，如 `sha256` (未写相关逻辑,无用)                                 |
-| `enable_password`    | 是否启用服务器密码保护。                                              |
-| `enable_autosave`    | 是否启用自动保存聊天记录功能。                                        |
+| `encrypt_algorithm`  | 加密算法，可选值包括 `RSA` |
+| `key_length`         | 密钥长度，不同加密算法有不同的密钥长度要求。|
+| `nickname`           | 客户端的昵称。 |
+| `motd`               | 服务器的欢迎消息（Message of the Day） |
+| `max_users`          | 服务器允许的最大用户数量（仅在服务器模式下有效）|
+| `max_timeout`        | 服务器允许的最大连接超时时间,单位为秒/s (看门狗)|
+| `pubkey_file`        | 公钥文件路径。   |
+| `key_file`           | 私钥文件路径。 |
+| `client_keys_dir`    | 客户端公钥路径 |
+| `enable_rooms`       | 是否启用房间功能。 |
+| `room_config`        | 房间配置文件目录路径。 |
+| `enable_hash`        | 是否启用密码哈希功(未写相关逻辑,无用)。 |
+| `hash_type`          | 哈希算法类型，如 `sha256` (未写相关逻辑,无用) |
+| `enable_password`    | 是否启用服务器密码保护 |
+| `enable_autosave`    | 是否启用自动保存聊天记录功能|
 | `autosave_delay`     | 自动保存时间间隔(单位为秒/s)
 | `enable_console`     | 在命令行中显示(命令行模式) |
 | `enable_webui`       | 启用本地网络图形化界面 (暂停维护) |
