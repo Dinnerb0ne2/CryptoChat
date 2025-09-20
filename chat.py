@@ -15,8 +15,8 @@
 #    See the License for the specific language governing permissions and
 #    limitations under the License.
 #
-# date: 2025-09-19
-# version: 1.2.3
+# date: 2025-09-20
+# version: 1.2.4
 # description: A simple chat application with encryption and room features.
 # LICENSE: Apache-2.0
 
@@ -82,15 +82,14 @@ class ChatApplication:
     # Compatibility Wrappers: Forward calls to server/client/room manager
     # (Maintains support for old code that may call these methods directly)
     def list_rooms(self, args):
-        """List all available chat rooms (forwards to server)"""
+        # List all available chat rooms (forwards to server)
         return self.server_inst.list_rooms(args) if hasattr(self, 'server_inst') else None
 
     def stop_server(self, args):
-        """Shut down the server (forwards to server)"""
+        # Shut down the server (forwards to server)
         return self.server_inst.stop_server(args) if hasattr(self, 'server_inst') else sys.exit(0)
 
     def load_config(self):
-        """Load and parse configuration from chat.properties"""
         # Default config values (used if file is missing or keys are unset)
         default_config = {
             'mode': 'server',
@@ -155,7 +154,6 @@ class ChatApplication:
             raise ValueError("CONFIG ERROR: enable_console and enable_webui cannot both be false")
 
     def load_rooms(self):
-        """Load room configurations via RoomManager (forwards to room manager)"""
         self.room_mgr = RoomManager(self.room_config_dir, self.config['enable_hash'])
         self.rooms = self.room_mgr.list_rooms()  # Maintain backward compatibility with old code
         if self.rooms:
@@ -270,7 +268,7 @@ class ChatApplication:
                 sys.exit(0)
 
     def setup_crypto(self):
-        """Initialize RSA encryption (generate keys if missing, load existing keys)"""
+        # Initialize encryption (generate keys if missing, load existing keys)
         algo = self.config['encrypt_algorithm'].upper()
         key_length = self.config['key_length']
         private_key_path = self.config['key_file']
@@ -286,7 +284,7 @@ class ChatApplication:
                 public_key_pem = RSA.export_public_key(public_key_obj)            
             else:
                 # Reject unsupported encryption algorithms
-                raise ValueError(f"Unsupported encryption algorithm: {algo} (only RSA is supported)")
+                raise ValueError(f"Unsupported encryption algorithm: {algo}")
 
             # Save generated keys to files
             with open(private_key_path, 'wb') as f:
@@ -302,7 +300,7 @@ class ChatApplication:
             self.public_key = f.read()
 
     def load_bans(self):
-        """Load banned IPs and users from bans.json (recovers previous bans)"""
+        # Load banned IPs and users from bans.json (recovers previous bans)
         if os.path.exists(self.bans_file):
             try:
                 with open(self.bans_file, 'r', encoding='utf-8') as f:
@@ -314,7 +312,7 @@ class ChatApplication:
                 print(f"Warning: Failed to load ban list - {str(e)} (starting with empty ban list)")
 
     def save_bans(self):
-        """Save current bans to bans.json (persists bans between restarts)"""
+        # Save current bans to bans.json (persists bans between restarts)
         try:
             with open(self.bans_file, 'w', encoding='utf-8') as f:
                 json.dump({
