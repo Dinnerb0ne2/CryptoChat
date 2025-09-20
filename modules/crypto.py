@@ -37,7 +37,7 @@ class CryptoManager:
             f.write(RSA.export_public_key(self.public_key))
 
     def set_server_public_key(self, pub_key_pem: str) -> None:
-        self.server_public_key = RSA.load_pem(pub_key_pem.encode())
+        self.server_public_key = RSA._load_pem(pub_key_pem.encode())
 
     def encrypt(self, data: dict) -> bytes:
         # Encrypt data (only sensitive fields)

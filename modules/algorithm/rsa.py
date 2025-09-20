@@ -111,18 +111,6 @@ def _export_pem(key: _RSAKey, kind: str) -> bytes:
     return pem.encode()
 
 
-def _load_pem(pem: bytes) -> _RSAKey:
-    """Return _RSAKey from PEM bytes."""
-    lines = [ln for ln in pem.decode().splitlines() if "-----" not in ln]
-    data = _base64_to_int("".join(lines))
-    # simple comma split – we stored n,e or n,e,d
-    n, rest = divmod(data, 10 ** (len(str(data)) // 2))
-    if "," in str(rest):
-        e, d = map(int, str(rest).split(",", 1))
-        return _RSAKey(n, e, d)
-    return _RSAKey(n, rest, 0)
-
-
 # ---------- high-level RSA ----------
 class RSA:
     """Static factory class compatible with chat.py calls."""
@@ -193,3 +181,15 @@ class RSA:
         s = int.from_bytes(signature, "big")
         h = pow(s, pub_key.e, pub_key.n)
         return h.to_bytes((h.bit_length() + 7) // 8 or 1, "big") == message
+    
+    @staticmethod
+    def _load_pem(pem: bytes) -> _RSAKey:
+        # Return _RSAKey from PEM bytes.
+        lines = [ln for ln in pem.decode().splitlines() if "-----" not in ln]
+        data = _base64_to_int("".join(lines))
+        # simple comma split – we stored n,e or n,e,d
+        n, rest = divmod(data, 10 ** (len(str(data)) // 2))
+        if "," in str(rest):
+            e, d = map(int, str(rest).split(",", 1))
+            return _RSAKey(n, e, d)
+        return _RSAKey(n, rest, 0)

@@ -57,8 +57,8 @@ class ChatClient:
             "password": password,
             "room_password": room_pwd,
         }
-        encrypted_hello = self.crypto.encrypt(hello_data)
-        self.sock.send(encrypted_hello)
+        # do not send encrypted hello_data
+        self.sock.send(hello_data.encode() if isinstance(hello_data, str) else json.dumps(hello_data).encode())
 
         # Get server's public key from initial response
         server_response = self.sock.recv(4096)
