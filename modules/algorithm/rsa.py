@@ -177,7 +177,7 @@ class RSA:
 
     @staticmethod
     def verify(message: bytes, signature: bytes, pub_key: _RSAKey) -> bool:
-        """Verify signature."""
+        # Verify signature.
         s = int.from_bytes(signature, "big")
         h = pow(s, pub_key.e, pub_key.n)
         return h.to_bytes((h.bit_length() + 7) // 8 or 1, "big") == message

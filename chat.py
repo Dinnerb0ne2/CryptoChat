@@ -16,7 +16,7 @@
 #    limitations under the License.
 #
 # date: 2025-09-20
-# version: 1.2.4
+# version: 1.3.0
 # description: A simple chat application with encryption and room features.
 # LICENSE: Apache-2.0
 
@@ -95,12 +95,11 @@ class ChatApplication:
             'mode': 'server',
             'ip': 'localhost',
             'port': '25566',
-            'encrypt_algorithm': 'RSA',
-            'key_length': '2048',
+            'encrypt_algorithm': 'AES',
+            'key_length': '128',
             'nickname': '',
             'motd': '',
             'max_users': '20',
-            'max_timeout': '20',
             'pubkey_file': 'public_key.pem',
             'key_file': 'private_key.pem',
             'client_keys_dir': 'client_keys/',
@@ -135,7 +134,6 @@ class ChatApplication:
         self.config['key_length'] = int(self.config['key_length'])
         self.config['enable_rooms'] = self.config['enable_rooms'].lower() == 'true'
         self.config['max_users'] = int(self.config['max_users'])
-        self.config['max_timeout'] = int(self.config.get('max_timeout', default_config['max_timeout']))
 
         self.config['client_keys_dir'] = self.config.get('client_keys_dir', 'client_keys/')
 

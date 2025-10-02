@@ -137,7 +137,6 @@ enable_rooms=true
 | `nickname`           | 客户端的昵称。 |
 | `motd`               | 服务器的欢迎消息（Message of the Day） |
 | `max_users`          | 服务器允许的最大用户数量（仅在服务器模式下有效）|
-| `max_timeout`        | 服务器允许的最大连接超时时间,单位为秒/s (看门狗)|
 | `pubkey_file`        | 公钥文件路径。   |
 | `key_file`           | 私钥文件路径。 |
 | `client_keys_dir`    | 客户端公钥路径 |

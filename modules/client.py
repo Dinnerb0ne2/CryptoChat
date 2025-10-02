@@ -196,4 +196,85 @@ class ChatClient:
             self.web_server = ChatWebServer(
                 self, 
                 port=int(self.config.get('webui_port', 25567))
+            )   
+             
+    def _init_webui(self):
+        # Check configuration validity
+        if not self.config.get('enable_console') and not self.config.get('enable_webui'):
+            raise ValueError("enable_console and enable_webui cannot both be false")
+        
+        # Start WebUI service if enabled
+        if self.config.get('enable_webui'):
+            from .web import ChatWebServer
+            self.web_server = ChatWebServer(
+                self, 
+                port=int(self.config.get('webui_port', 25567))
             )
+            threading.Thread(target=self.web_server.start, daemon=True).start()
+            print(f"WebUI running at http://localhost:{self.config.get('webui_port', 25567)}")
+
+    def send_message(self, text: str):
+        """Send message from WebUI"""
+        message_data = {
+            "type": "message",
+            "message": text,
+            "timestamp": time.time(),
+            "room": self.room,
+        }
+        encrypted_msg = self.crypto.encrypt(message_data)
+        self.sock.send(encrypted_msg)
+
+    def handle_command(self, cmd: str) -> str:
+        """Handle command from WebUI"""
+        parts = cmd.strip().split()
+        if not parts:
+            return "Empty command"
+        c = parts[0].lower()
+        
+        if c == "ping":
+            cmd_data = {"type": "ping", "timestamp": time.time()}
+            self.sock.send(self.crypto.encrypt(cmd_data))
+            return "Ping sent"
+            
+        elif c == "online":
+            cmd_data = {"type": "online"}
+            self.sock.send(self.crypto.encrypt(cmd_data))
+            return "Requesting online list"
+            
+        elif c == "exit":
+            self.sock.close()
+            sys.exit(0)
+            return "Exiting..."
+            
+        elif c == "join" and len(parts) >= 2:
+            room = " ".join(parts[1:])
+            pwd = ""  # WebUI should handle password prompt separately
+            cmd_data = {
+                "type": "join",
+                "room": room,
+                "room_password": pwd,
+            }
+            self.sock.send(self.crypto.encrypt(cmd_data))
+            return f"Joining room {room}..."
+            
+        elif c == "rooms":
+            cmd_data = {"type": "rooms"}
+            self.sock.send(self.crypto.encrypt(cmd_data))
+            return "Requesting room list"
+            
+        elif c == "save":
+            cmd_data = {"type": "save"}
+            self.sock.send(self.crypto.encrypt(cmd_data))
+            return "Saving chat history"
+            
+        else:
+            return f"Unknown command: {c}"
+
+    def _save_history(self):
+        if not self.chat_history:
+            return
+        fname = f"client_history_{int(time.time())}.txt"
+        with open(fname, "w", encoding="utf-8") as f:
+            for item in self.chat_history:
+                f.write(f"{item['local_time']}\n    {item['user']}: {item['message']}\n")
+        return fname  # Return filename for WebUI feedback

@@ -119,10 +119,7 @@ class ChatServer:
 
     def _handle_client(self, sock: socket.socket, addr: Any):
         try:
-            max_timeout = int(self.cfg.get("max_timeout", 20))
-
-            sock.settimeout(max_timeout)
-            
+            print(f"Connection from {addr}")
             # hello
             data = sock.recv(4096)
             if not data:
@@ -188,9 +185,6 @@ class ChatServer:
                 "message": self._motd(room)
             }, client_pub_key)
             sock.send(motd_msg)
-
-            # Message handling main loop - set persistent communication timeout (using same config)
-            sock.settimeout(max_timeout)
             
             while True:
                 data = sock.recv(4096)
@@ -204,8 +198,6 @@ class ChatServer:
                 msg = self._decrypt_client_data(data, client_pub_key)
                 self._route_message(addr, msg)
                 
-        except socket.timeout:
-            print(f"Client {addr} timed out (no response for over {max_timeout} seconds)")
         except ConnectionResetError:
             print(f"Client {addr} forcibly disconnected")
         except json.JSONDecodeError:
@@ -282,183 +274,270 @@ class ChatServer:
             sock.send(response)
             
         elif t == "online":
-            sock = client["socket"]
+            # Get list of online users in the same room
+            room = client["room"]
+            online_nicks = [
+                c["nickname"] for addr, c in self.clients.items()
+                if c["room"] == room
+            ]
             response = self._encrypt_response({
                 "type": "online",
-                "count": len(self.clients),
-                "nicknames": [c["nickname"] for c in self.clients.values()],
+                "nicknames": online_nicks,
+                "count": len(online_nicks)
+            }, client["public_key"])
+            sock.send(response)
+            
+        elif t == "join" and self.cfg.get("enable_rooms"):
+            target_room = msg.get("room")
+            room_pwd = msg.get("room_password", "")
+            
+            # Validate room exists or create if allowed
+            if target_room not in self.rooms:
+                # Check if room creation is allowed (configurable)
+                if not self.cfg.get("allow_room_creation", True):
+                    response = self._encrypt_response({
+                        "type": "system",
+                        "message": "Room creation not allowed"
+                    }, client["public_key"])
+                    sock.send(response)
+                    return
+                # Create new room
+                self.rooms[target_room] = _Room(
+                    name=target_room,
+                    cfg_dir=self.room_config_dir
+                )
+                self.rooms[target_room].load_bans()
+            
+            room_obj = self.rooms[target_room]
+            
+            # Check room bans
+            if room_obj.is_banned(client["nickname"], addr[0]):
+                response = self._encrypt_response({
+                    "type": "system",
+                    "message": f"Banned from room {target_room}"
+                }, client["public_key"])
+                sock.send(response)
+                return
+            
+            # Verify room password
+            if not room_obj.check_password(room_pwd, self.cfg.get("enable_hash")):
+                response = self._encrypt_response({
+                    "type": "system",
+                    "message": "Incorrect room password"
+                }, client["public_key"])
+                sock.send(response)
+                return
+            
+            # Update client's room
+            old_room = client["room"]
+            client["room"] = target_room
+            
+            # Broadcast room change
+            if old_room:
+                self._broadcast({
+                    "type": "system",
+                    "message": f"{client['nickname']} left the room"
+                }, room=old_room, exclude=addr)
+            
+            self._broadcast({
+                "type": "system",
+                "message": f"{client['nickname']} joined the room"
+            }, room=target_room, exclude=addr)
+            
+            # Send room join confirmation
+            response = self._encrypt_response({
+                "type": "join",
+                "room": target_room,
+                "message": f"Successfully joined {target_room}"
+            }, client["public_key"])
+            sock.send(response)
+            
+        elif t == "rooms" and self.cfg.get("enable_rooms"):
+            # List available rooms
+            room_list = list(self.rooms.keys())
+            response = self._encrypt_response({
+                "type": "system",
+                "message": f"Rooms: {', '.join(room_list) or 'None'}"
             }, client["public_key"])
             sock.send(response)
 
-    # ---------- Broadcasting ----------
-    def _broadcast(self, msg: dict, room=None, exclude=None):
+    # Broadcast functionality
+    def _broadcast(self, data: dict, room: str = None, exclude: Any = None):
         """Broadcast message to relevant clients"""
-        for addr, c in self.clients.items():
-            if exclude and addr == exclude:
+        encrypted_data_map = {}  # Cache encrypted messages per public key
+        
+        for addr, client in self.clients.items():
+            if addr == exclude:
                 continue
-            if room is not None and c["room"] != room:
+                
+            # Check room filter
+            if room is not None and client["room"] != room:
                 continue
+                
+            # Get pre-encrypted data or encrypt once per public key
+            pub_key = client["public_key"]
+            if pub_key not in encrypted_data_map:
+                encrypted_data_map[pub_key] = self._encrypt_response(data, pub_key)
+                
+            # Send message
             try:
-                encrypted_msg = self._encrypt_response(msg, c["public_key"])
-                c["socket"].send(encrypted_msg)
-            except (BrokenPipeError, OSError):
-                pass
+                client["socket"].send(encrypted_data_map[pub_key])
+            except Exception as e:
+                print(f"Failed to broadcast to {addr}: {str(e)}")
 
+    # Admin console
     def _admin_console(self):
-        print("=== Admin Console ===")
-        print("tips: type /help to get help info")
+        """Handle admin commands from server console"""
         while self.running:
             try:
-                line = input("").strip()
-            except (EOFError, KeyboardInterrupt):
+                cmd = input("Admin> ").strip()
+                if not cmd:
+                    continue
+                parts = cmd.split()
+                cmd_name = parts[0].lower()
+                if cmd_name in self.admin_cmds:
+                    self.admin_cmds[cmd_name](parts[1:])
+                else:
+                    print("Unknown command. Type 'help' for list.")
+            except (KeyboardInterrupt, EOFError):
                 self._stop()
-            if line.startswith("/"):
-                self._handle_admin(line[1:])
-            elif line:
-                pack = {
-                    "type": "message",
-                    "nickname": "Admin",
-                    "message": line,
-                    "timestamp": time.time(),
-                    "room": None,
-                }
-                self._broadcast(pack)
+                break
 
-    def _handle_admin(self, cmd: str):
-        parts = cmd.split()
-        if not parts:
-            return
-        c = parts[0].lower()
-        if c in self.admin_cmds:
-            self.admin_cmds[c](parts[1:])
-        else:
-            print("Unknown command")
-
+    # Admin command handlers
     def _kick(self, args):
         if not args:
-            print("Usage: /kick <nickname>")
+            print("Usage: kick <nickname>")
             return
-        nick = " ".join(args)
-        for addr, c in list(self.clients.items()):
-            if c["nickname"].lower() == nick.lower():
+        target_nick = args[0].lower()
+        for addr, client in self.clients.items():
+            if client["nickname"].lower() == target_nick:
                 try:
                     response = self._encrypt_response({
-                        "type": "system", 
-                        "message": "Kicked by admin"
-                    }, c["public_key"])
-                    c["socket"].send(response)
-                    c["socket"].close()
+                        "type": "system",
+                        "message": "You have been kicked"
+                    }, client["public_key"])
+                    client["socket"].send(response)
+                    client["socket"].close()
+                    print(f"Kicked {target_nick}")
                 except:
                     pass
-                del self.clients[addr]
-                print(f"Kicked {nick}")
                 return
-        print("User not found")
+        print(f"User {target_nick} not found")
 
     def _ban(self, args):
-        if not args:
-            print("Usage: /ban <nickname|ip>")
+        if len(args) < 2 or args[0] not in ["user", "ip"]:
+            print("Usage: ban <user|ip> <target>")
             return
-        target = " ".join(args)
-
-        found = False
-        for addr, c in list(self.clients.items()):
-            if c["nickname"].lower() == target.lower():
-                self.bans["users"].add(c["nickname"].lower())
-                # Kick the user
-                try:
-                    response = self._encrypt_response({
-                        "type": "system", 
-                        "message": "Banned by admin"
-                    }, c["public_key"])
-                    c["socket"].send(response)
-                    c["socket"].close()
-                except:
-                    pass
-                del self.clients[addr]
-                found = True
-                print(f"Banned user {target}")
-                break
-        if not found:
+        target_type, target = args[0], args[1].lower()
+        if target_type == "user":
+            self.bans["users"].add(target)
+            print(f"Banned user {target}")
+        elif target_type == "ip":
             self.bans["ips"].add(target)
             print(f"Banned IP {target}")
         self._save_bans()
 
     def _unban(self, args):
-        if not args:
-            print("Usage: /unban <nickname|ip>")
+        if len(args) < 2 or args[0] not in ["user", "ip"]:
+            print("Usage: unban <user|ip> <target>")
             return
-        target = " ".join(args)
-        if target.lower() in self.bans["users"]:
-            self.bans["users"].remove(target.lower())
+        target_type, target = args[0], args[1].lower()
+        if target_type == "user" and target in self.bans["users"]:
+            self.bans["users"].remove(target)
             print(f"Unbanned user {target}")
-        elif target in self.bans["ips"]:
+        elif target_type == "ip" and target in self.bans["ips"]:
             self.bans["ips"].remove(target)
             print(f"Unbanned IP {target}")
-        else:
-            print("Not found in ban list")
         self._save_bans()
 
-    def _list_bans(self, _args):
-        print("Banned users:", sorted(self.bans["users"]))
-        print("Banned IPs:", sorted(self.bans["ips"]))
+    def _list_bans(self, _args=None):
+        print("Banned users:", ", ".join(self.bans["users"]) or "None")
+        print("Banned IPs:", ", ".join(self.bans["ips"]) or "None")
 
-    def _admin_help(self, _args):
-        print("/kick <nick>  /ban <nick|ip>  /unban <nick|ip>  /listbans  /save  /stop  /help")
+    def _admin_help(self, _args=None):
+        print("Admin commands:", ", ".join(self.admin_cmds.keys()))
 
-    # ---------- Persistence ----------
+    # Persistence
     def _load_bans(self):
         if os.path.exists(self.bans_file):
             try:
-                with open(self.bans_file, encoding="utf-8") as f:
-                    b = json.load(f)
-                    self.bans = {
-                        "ips": set(b.get("ips", [])), 
-                        "users": set(b.get("users", []))
-                    }
+                with open(self.bans_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    self.bans["ips"] = set(data.get("ips", []))
+                    self.bans["users"] = set(data.get("users", []))
             except Exception as e:
-                print("Load bans error:", e)
+                print(f"Error loading bans: {e}")
 
     def _save_bans(self):
         try:
             with open(self.bans_file, "w", encoding="utf-8") as f:
                 json.dump({
-                    "ips": list(self.bans["ips"]), 
+                    "ips": list(self.bans["ips"]),
                     "users": list(self.bans["users"])
                 }, f, indent=2)
         except Exception as e:
-            print("Save bans error:", e)
+            print(f"Error saving bans: {e}")
 
     def _load_rooms(self):
-        pass
-
-    def _motd(self, room=None):
-        return self.cfg.get("motd", "Welcome")
-
-    def _verify_server_pwd(self, pwd: str) -> bool:
-        if not self.cfg.get("enable_password") == "true":
-            return True
-        if os.path.exists("password.hash"):
-            with open("password.hash", encoding="utf-8") as f:
-                h = f.read().strip()
-            return h == hashlib.sha256(pwd.encode()).hexdigest()
-        if os.path.exists("password.txt"):
-            with open("password.txt", encoding="utf-8") as f:
-                return f.read().strip() == pwd
-        return True
+        """Load rooms from configuration directory"""
+        if not os.path.exists(self.room_config_dir):
+            os.makedirs(self.room_config_dir)
+            return
+            
+        for filename in os.listdir(self.room_config_dir):
+            if filename.endswith(".cfg"):
+                room_name = filename[:-4]
+                room = _Room(
+                    name=room_name,
+                    cfg_dir=self.room_config_dir
+                )
+                # Load room config
+                with open(os.path.join(self.room_config_dir, filename), "r", encoding="utf-8") as f:
+                    for line in f:
+                        if "=" in line:
+                            key, value = line.strip().split("=", 1)
+                            if key == "motd":
+                                room.motd = value
+                            elif key == "password":
+                                room.password = value
+                            elif key == "password_hash":
+                                room.password_hash = value
+                room.load_bans()
+                self.rooms[room_name] = room
 
     def _save_history(self, _args=None):
+        """Save chat history to file"""
         if not self.chat_history:
-            print("No history")
+            print("No history to save")
             return
-        fname = f"server_history_{int(time.time())}.txt"
-        with open(fname, "w", encoding="utf-8") as f:
-            for item in self.chat_history:
-                f.write(f"[{item['local_time']}] {item['user']}: {item['message']}\n")
-        print(f"Saved -> {fname}")
+            
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"chat_history_{timestamp}.json"
+        try:
+            with open(filename, "w", encoding="utf-8") as f:
+                json.dump(self.chat_history, f, indent=2)
+            print(f"History saved to {filename}")
+        except Exception as e:
+            print(f"Error saving history: {e}")
 
     def _auto_save(self):
+        """Auto-save chat history at intervals"""
         delay = int(self.cfg.get("autosave_delay", 300))
-        while True:
+        while self.running:
             time.sleep(delay)
-            self._save_history()
+            if self.running:  # Check again after sleep
+                self._save_history()
+
+    def _motd(self, room: str = None) -> str:
+        """Get Message of the Day"""
+        if room and self.cfg.get("enable_rooms") and room in self.rooms:
+            return self.rooms[room].motd or self.cfg.get("motd", "Welcome!")
+        return self.cfg.get("motd", "Welcome to the chat!")
+
+    def _verify_server_pwd(self, pwd: str) -> bool:
+        """Verify server password"""
+        if not self.cfg.get("server_password_hash"):
+            return True  # No password set
+        if self.cfg.get("enable_hash"):
+            return hashlib.sha256(pwd.encode()).hexdigest() == self.cfg["server_password_hash"]
+        return pwd == self.cfg.get("server_password", "")
