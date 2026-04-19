@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CryptoChat Admin</title>
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f8f9fc; margin: 0; }
+    .wrap { max-width: 720px; margin: 24px auto; padding: 16px; }
+    .card { background: #fff; border-radius: 10px; padding: 16px; box-shadow: 0 2px 8px #00000014; }
+  </style>
+</head>
+<body>
+<div class="wrap" x-data="adminApp()">
+  <div class="card">
+    <h2>管理员封禁</h2>
+    <input x-model="username" placeholder="用户名" />
+    <input x-model="reason" placeholder="原因" />
+    <button @click="ban">执行封禁</button>
+    <p x-text="message"></p>
+  </div>
+</div>
+<script>
+function adminApp() {
+  return {
+    username: "",
+    reason: "policy_violation",
+    message: "通过 CLI 执行管理员权限操作。",
+    ban() {
+      this.message = "请使用: cryptochat server ban --username <name> --reason <reason>";
+    },
+  }
+}
+</script>
+</body>
+</html>
+
