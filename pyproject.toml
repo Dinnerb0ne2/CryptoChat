@@ -1,0 +1,57 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cryptochat"
+version = "2.0.0"
+description = "CryptoChat v2.0 - CLI + Web encrypted chat application"
+readme = "README.md"
+requires-python = "==3.14.3"
+license = { text = "MIT" }
+authors = [{ name = "CryptoChat Team" }]
+dependencies = [
+  "click>=8.1.8",
+  "cryptography>=45.0.0",
+  "fastapi>=0.115.0",
+  "jinja2>=3.1.4",
+  "rich>=13.9.4",
+  "sqlalchemy>=2.0.36",
+  "uvicorn>=0.34.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "httpx>=0.28.1",
+  "mypy>=1.17.1",
+  "pytest>=8.4.0",
+  "pytest-asyncio>=0.26.0",
+  "ruff>=0.12.7",
+]
+
+[project.scripts]
+cryptochat = "cryptochat.cli.app:cli"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+target-version = "py314"
+line-length = 100
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.mypy]
+python_version = "3.14"
+strict = true
+warn_unused_configs = true
+namespace_packages = true
+mypy_path = "src"
+
+[tool.pytest.ini_options]
+minversion = "8.0"
+addopts = "-q --cov=cryptochat --cov-report=term-missing --cov-report=xml"
+testpaths = ["tests"]
+
