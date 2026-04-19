@@ -1,0 +1,50 @@
+{
+  "database": {
+    "path": "data/chat.db"
+  },
+  "server": {
+    "host": "127.0.0.1",
+    "port": 9443,
+    "certfile": "certs/server.crt",
+    "keyfile": "certs/server.key",
+    "ca_file": "",
+    "allow_insecure_clients": true,
+    "backlog": 128
+  },
+  "client": {
+    "server_host": "127.0.0.1",
+    "server_port": 9443,
+    "cert_verify": false,
+    "ca_file": "",
+    "nickname": "guest",
+    "room": ""
+  },
+  "rooms": {
+    "enabled": false,
+    "default_room": "lobby",
+    "allow_dynamic": true,
+    "room_scoped_history": true,
+    "room_scoped_clear": true,
+    "rooms": {
+      "lobby": {
+        "password": ""
+      },
+      "team-a": {
+        "password": "team-secret"
+      }
+    }
+  },
+  "history": {
+    "default_limit": 50,
+    "max_limit": 500
+  },
+  "web": {
+    "enabled": true,
+    "host": "127.0.0.1",
+    "port": 9444,
+    "use_tls": false,
+    "certfile": "certs/server.crt",
+    "keyfile": "certs/server.key",
+    "static_dir": "src/static"
+  }
+}

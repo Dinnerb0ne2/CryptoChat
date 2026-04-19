@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CryptoChat WebUI</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <main>
+    <h1>CryptoChat WebUI</h1>
+    <section class="controls">
+      <input id="nickname" placeholder="昵称" value="web-user" />
+      <input id="room" placeholder="房间(可选)" />
+      <input id="roomPassword" placeholder="房间密码(可选)" />
+      <button id="loadUsers">在线用户</button>
+      <button id="loadHistory">历史消息</button>
+      <button id="clearHistory">清空消息</button>
+    </section>
+    <section class="chat">
+      <div id="messages"></div>
+      <div class="send-box">
+        <input id="message" placeholder="输入消息或 /命令" />
+        <button id="sendBtn">发送</button>
+      </div>
+    </section>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>

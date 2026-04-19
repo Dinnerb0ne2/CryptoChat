@@ -1,0 +1,42 @@
+body {
+  font-family: Arial, sans-serif;
+  margin: 0;
+  background: #0b1220;
+  color: #e4ecff;
+}
+
+main {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.controls,
+.send-box {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+input,
+button {
+  padding: 8px;
+  border-radius: 4px;
+  border: 1px solid #32486f;
+}
+
+button {
+  background: #284a87;
+  color: #fff;
+  cursor: pointer;
+}
+
+#messages {
+  min-height: 460px;
+  max-height: 460px;
+  overflow-y: auto;
+  border: 1px solid #32486f;
+  padding: 12px;
+  background: #101a2d;
+  white-space: pre-wrap;
+}
