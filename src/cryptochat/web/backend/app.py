@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
@@ -8,7 +10,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, WebSocket, WebSocke
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-from cryptochat.core import ChatService, create_session_factory, init_db
+from cryptochat.core import ChatService, create_session_factory, dispose_engine, init_db
 
 from .auth import issue_token, verify_token
 from .schemas import LoginRequest, PostMessageRequest, RegisterRequest
@@ -48,7 +50,12 @@ def create_app(
     service = ChatService(session_factory)
     hub = ConnectionHub()
 
-    app = FastAPI(title="CryptoChat API", version="2.0.0")
+    @asynccontextmanager
+    async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+        yield
+        dispose_engine(db_url)
+
+    app = FastAPI(title="CryptoChat API", version="2.0.0", lifespan=lifespan)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
