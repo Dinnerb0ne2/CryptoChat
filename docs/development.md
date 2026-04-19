@@ -11,7 +11,7 @@
 ## Local Commands
 ```bash
 python -m venv .venv
-.venv\Scripts\python -m pip install -r requests.txt
+.venv\Scripts\python -m pip install -r requirements.txt
 .venv\Scripts\python -m pip install -e .
 .venv\Scripts\ruff check .
 .venv\Scripts\ruff format .

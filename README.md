@@ -13,7 +13,7 @@ CryptoChat is a Python 3.14.3 encrypted chat application with both CLI and Web U
 ```bash
 python -m venv .venv
 .venv\Scripts\python -m pip install --upgrade pip
-.venv\Scripts\python -m pip install -r requests.txt
+.venv\Scripts\python -m pip install -r requirements.txt
 .venv\Scripts\python -m pip install -e .
 ```
 

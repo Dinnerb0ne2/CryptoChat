@@ -3,7 +3,7 @@ PYTHON ?= python
 .PHONY: install lint type test run-web run-tcp
 
 install:
-	$(PYTHON) -m pip install -r requests.txt
+	$(PYTHON) -m pip install -r requirements.txt
 	$(PYTHON) -m pip install -e .
 
 lint:
